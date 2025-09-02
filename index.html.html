@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>はむたくん、オセロで勝負だ！</title>
+<style>
+body { font-family:sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; background:#f0f0f0; }
+.title { font-size:24px; font-weight:bold; }
+.subtitle { font-size:14px; color:#555; margin-bottom:10px; }
+.controls { margin:10px 0; }
+.controls select, .controls button { margin-right:5px; padding:5px 10px; font-size:14px; }
+.board { display:grid; grid-template-columns:repeat(8,50px); grid-template-rows:repeat(8,50px); gap:2px; margin-top:10px; }
+.square { width:50px; height:50px; background:green; border:1px solid #000; position:relative; cursor:pointer; }
+.disc { width:40px; height:40px; border-radius:50%; position:absolute; top:5px; left:5px; }
+.disc.black { background:black; }
+.disc.white { background:white; }
+.hint { background:lightgreen; }
+.scoreboard { margin-top:10px; display:flex; gap:15px; font-size:16px; }
+.scoreboard span { font-weight:bold; }
+#status { margin-top:10px; font-size:18px; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div class="title">はむたくん、オセロで勝負だ！</div>
+<div class="subtitle">CPU対戦のみ。対戦相手は「けむたくん」！</div>
+
+<div class="controls">
+    <select id="levelSelect">
+        <option value="1">けむたくん Lv1（ランダム）</option>
+        <option value="2">けむたくん Lv2（石数最大化）</option>
+        <option value="3">けむたくん Lv3（角優先）</option>
+        <option value="4">けむたくん Lv4</option>
+        <option value="5">けむたくん Lv5</option>
+        <option value="6">けむたくん Lv6（先読み1手）</option>
+        <option value="7">けむたくん Lv7（先読み1手＋評価）</option>
+        <option value="8">けむたくん Lv8（先読み2手）</option>
+        <option value="9">けむたくん Lv9（先読み2手＋評価）</option>
+        <option value="10">けむたくん Lv10（先読み3手＋安全手優先）</option>
+    </select>
+    <button id="btn-undo">Undo</button>
+    <button id="btn-pass">Pass</button>
+    <button id="btn-hint">Hint</button>
+    <button id="btn-restart">Restart</button>
+</div>
+
+<div id="board" class="board"></div>
+
+<div class="scoreboard">
+    <div>手番: <span id="turnText">黒</span></div>
+    <div>黒 (はむたくん): <span id="blackScore">2</span></div>
+    <div>白 (けむたくん): <span id="whiteScore">2</span></div>
+</div>
+
+<div id="status"></div>
+
+<script>
+const SIZE=8, EMPTY=0, BLACK=1, WHITE=-1;
+const boardEl=document.getElementById('board');
+const turnText=document.getElementById('turnText');
+const blackScoreEl=document.getElementById('blackScore');
+const whiteScoreEl=document.getElementById('whiteScore');
+const statusEl=document.getElementById('status');
+const btnRestart=document.getElementById('btn-restart');
+const btnUndo=document.getElementById('btn-undo');
+const btnHint=document.getElementById('btn-hint');
+const btnPass=document.getElementById('btn-pass');
+const levelSelect=document.getElementById('levelSelect');
+
+let state = { board:createInitialBoard(), turn:BLACK, showHints:true, history:[], level:1 };
+
+function createInitialBoard(){
+    const b = Array.from({length:SIZE}, ()=>Array(SIZE).fill(EMPTY));
+    const mid = SIZE/2;
+    b[mid-1][mid-1]=WHITE; b[mid][mid]=WHITE;
+    b[mid-1][mid]=BLACK; b[mid][mid-1]=BLACK;
+    return b;
+}
+
+const DIRS=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+function inBounds(r,c){return r>=0&&r<SIZE && c>=0&&c<SIZE;}
+function getLegalMoves(board,player){
+    const moves = new Map();
+    for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+        if(board[r][c]!==EMPTY) continue;
+        const flipsAll=[];
+        for(const [dr,dc] of DIRS){
+            let i=r+dr,j=c+dc,st=[];
+            while(inBounds(i,j)&&board[i][j]===-player){ st.push([i,j]); i+=dr;j+=dc; }
+            if(st.length>0&&inBounds(i,j)&&board[i][j]===player) flipsAll.push(...st);
+        }
+        if(flipsAll.length>0) moves.set(`${r},${c}`, flipsAll);
+    }
+    return moves;
+}
+
+function applyMove(board,r,c,player,flips){
+    const next = board.map(row=>row.slice());
+    next[r][c]=player;
+    for(const [i,j] of flips) next[i][j]=player;
+    return next;
+}
+
+function score(board){
+    let black=0,white=0;
+    for(const row of board) for(const v of row){ if(v===BLACK) black++; else if(v===WHITE) white++; }
+    return {black,white};
+}
+
+function render(){
+    boardEl.innerHTML='';
+    const legal = getLegalMoves(state.board,state.turn);
+    for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+        const sq = document.createElement('button');
+        sq.className='square'; sq.dataset.r=r; sq.dataset.c=c;
+        const v=state.board[r][c];
+        if(v!==EMPTY){ const d=document.createElement('div'); d.className='disc '+(v===BLACK?'black':'white'); sq.appendChild(d);}
+        else if(legal.has(`${r},${c}`) && state.showHints) sq.classList.add('hint');
+        sq.addEventListener('click',onPlace);
+        boardEl.appendChild(sq);
+    }
+    const {black,white}=score(state.board);
+    blackScoreEl.textContent=black; whiteScoreEl.textContent=white;
+    turnText.textContent=state.turn===BLACK?'黒':'白';
+    checkGameOver();
+}
+
+function onPlace(e){
+    const r=+e.currentTarget.dataset.r;
+    const c=+e.currentTarget.dataset.c;
+    makeMove(r,c);
+}
+
+function makeMove(r,c){
+    const legal=getLegalMoves(state.board,state.turn);
+    const key=`${r},${c}`;
+    if(!legal.has(key)) return;
+    pushHistory();
+    state.board = applyMove(state.board,r,c,state.turn,legal.get(key));
+    state.turn*=-1;
+    render();
+    if(state.turn===WHITE) setTimeout(cpuMove,700);
+}
+
+function cpuMove(){
+    const legal=getLegalMoves(state.board,WHITE);
+    if(legal.size===0){ state.turn=BLACK; render(); return; }
+    const move=chooseMove(legal,state.level,state.board,WHITE);
+    if(move) makeMove(move[0],move[1]);
+}
+
+function chooseMove(legal,level,board,player){
+    const moves=[...legal.keys()].map(k=>k.split(',').map(Number));
+    if(level===1) return moves[Math.floor(Math.random()*moves.length)];
+    let bestVal=-Infinity,bestMove=null;
+    const depth = level>=10?3: level>=8?2: level>=6?1:0;
+    for(const [r,c] of moves){
+        const flips=legal.get(`${r},${c}`);
+        let val=minimax(applyMove(board,r,c,player,flips),depth,-player,level);
+        if(val>bestVal){ bestVal=val; bestMove=[r,c]; }
+    }
+    return bestMove;
+}
+
+function minimax(board,depth,player,level){
+    if(depth===0) return evaluateBoard(board,player,level);
+    const legal=getLegalMoves(board,player);
+    if(legal.size===0) return evaluateBoard(board,player,level);
+    let best=(player===WHITE)?-Infinity:Infinity;
+    for(const key of legal.keys()){
+        const [r,c]=key.split(',').map(Number);
+        const flips=legal.get(key);
+        const newBoard=applyMove(board,r,c,player,flips);
+        const val=minimax(newBoard,depth-1,-player,level);
+        if(player===WHITE){ if(val>best) best=val; }
+        else { if(val<best) best=val; }
+    }
+    return best;
+}
+
+function evaluateBoard(board,player,level){
+    let val=0;
+    for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+        if(board[r][c]===WHITE) val+=1;
+        if(board[r][c]===BLACK) val-=1;
+    }
+    const corners=[[0,0],[0,7],[7,0],[7,7]];
+    for(const [r,c] of corners){ if(board[r][c]===WHITE) val+=10; if(board[r][c]===BLACK) val-=10; }
+    for(let i=0;i<SIZE;i++){ if(board[0][i]===WHITE||board[7][i]===WHITE) val+=3; if(board[0][i]===BLACK||board[7][i]===BLACK) val-=3; }
+    for(let i=1;i<SIZE-1;i++){ if(board[i][0]===WHITE||board[i][7]===WHITE) val+=3; if(board[i][0]===BLACK||board[i][7]===BLACK) val-=3; }
+    return val;
+}
+
+function pushHistory(){ state.history.push({board:state.board.map(r=>r.slice()), turn:state.turn}); }
+function undo(){ const prev=state.history.pop(); if(prev){ state.board=prev.board; state.turn=prev.turn; render(); } }
+function restart(){ state.board=createInitialBoard(); state.turn=BLACK; state.history=[]; statusEl.textContent=''; render(); }
+function toggleHint(){ state.showHints=!state.showHints; render(); }
+
+function checkGameOver(){
+    const legalBlack=getLegalMoves(state.board,BLACK);
+    const legalWhite=getLegalMoves(state.board,WHITE);
+    if(legalBlack.size===0 && legalWhite.size===0){
+        const {black,white}=score(state.board);
+        if(black>white) statusEl.textContent='勝者: はむたくん (黒)！';
+        else if(white>black) statusEl.textContent='勝者: けむたくん (白)！';
+        else statusEl.textContent='引き分けです！';
+    }
+}
+
+btnRestart.addEventListener('click',restart);
+btnUndo.addEventListener('click',undo);
+btnHint.addEventListener('click',toggleHint);
+btnPass.addEventListener('click', () => { state.turn*=-1; render(); });
+levelSelect.addEventListener('change',()=>{ state.level=+levelSelect.value; });
+
+render();
+</script>
+
+</body>
+</html>
