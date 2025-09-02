@@ -5,20 +5,73 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>はむたくん、オセロで勝負だ！</title>
 <style>
-body { font-family:sans-serif; display:flex; flex-direction:column; align-items:center; padding:10px; background:#f0f0f0; }
-.title { font-size:24px; font-weight:bold; text-align:center; }
-.subtitle { font-size:14px; color:#555; margin-bottom:10px; text-align:center; }
-.controls { margin:10px 0; display:flex; flex-wrap:wrap; justify-content:center; gap:5px; }
-.controls select, .controls button { padding:10px 15px; font-size:16px; border-radius:5px; }
-.board { display:grid; grid-template-columns:repeat(8,1fr); width:95vw; max-width:400px; aspect-ratio:1; gap:2px; margin-top:10px; }
-.square { background:green; border:1px solid #000; position:relative; }
-.disc { width:80%; height:80%; border-radius:50%; position:absolute; top:10%; left:10%; }
+body {
+    font-family:sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:20px;
+    background:#f0f0f0;
+    margin:0;
+}
+.title { font-size:2rem; font-weight:bold; text-align:center; }
+.subtitle { font-size:1rem; color:#555; margin-bottom:10px; text-align:center; }
+.controls {
+    margin:10px 0;
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:5px;
+}
+.controls select, .controls button {
+    padding:5px 10px;
+    font-size:1rem;
+}
+.board {
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+    gap:2px;
+    width:90vw;
+    max-width:500px;
+    aspect-ratio:1;
+    margin-top:10px;
+}
+.square {
+    width:100%;
+    height:100%;
+    background:green;
+    border:1px solid #000;
+    position:relative;
+    cursor:pointer;
+}
+.disc {
+    width:80%;
+    height:80%;
+    border-radius:50%;
+    position:absolute;
+    top:10%;
+    left:10%;
+}
 .disc.black { background:black; }
 .disc.white { background:white; }
 .hint { background:lightgreen; }
-.scoreboard { margin-top:10px; display:flex; flex-wrap:wrap; gap:10px; font-size:16px; justify-content:center; }
+.scoreboard {
+    margin-top:10px;
+    display:flex;
+    gap:15px;
+    font-size:1rem;
+    flex-wrap:wrap;
+    justify-content:center;
+}
 .scoreboard span { font-weight:bold; }
-#status { margin-top:10px; font-size:18px; font-weight:bold; text-align:center; }
+#status { margin-top:10px; font-size:1.2rem; font-weight:bold; text-align:center; word-break:break-word; }
+@media(max-width:400px){
+    .title { font-size:1.5rem; }
+    .subtitle { font-size:0.9rem; }
+    .controls select, .controls button { font-size:0.9rem; padding:4px 8px; }
+    .scoreboard { font-size:0.9rem; }
+}
 </style>
 </head>
 <body>
@@ -27,30 +80,30 @@ body { font-family:sans-serif; display:flex; flex-direction:column; align-items:
 <div class="subtitle">CPU対戦のみ。対戦相手は「けむたくん」！</div>
 
 <div class="controls">
-<select id="levelSelect">
-<option value="1">けむたくん Lv1（ランダム）</option>
-<option value="2">けむたくん Lv2（石数最大化）</option>
-<option value="3">けむたくん Lv3（角優先）</option>
-<option value="4">けむたくん Lv4</option>
-<option value="5">けむたくん Lv5</option>
-<option value="6">けむたくん Lv6（先読み1手）</option>
-<option value="7">けむたくん Lv7（先読み1手＋評価）</option>
-<option value="8">けむたくん Lv8（先読み2手）</option>
-<option value="9">けむたくん Lv9（先読み2手＋評価）</option>
-<option value="10">けむたくん Lv10（先読み3手＋安全手優先）</option>
-</select>
-<button id="btn-undo">Undo</button>
-<button id="btn-pass">Pass</button>
-<button id="btn-hint">Hint</button>
-<button id="btn-restart">Restart</button>
+    <select id="levelSelect">
+        <option value="1">けむたくん Lv1（ランダム）</option>
+        <option value="2">けむたくん Lv2（石数最大化）</option>
+        <option value="3">けむたくん Lv3（角優先）</option>
+        <option value="4">けむたくん Lv4</option>
+        <option value="5">けむたくん Lv5</option>
+        <option value="6">けむたくん Lv6（先読み1手）</option>
+        <option value="7">けむたくん Lv7（先読み1手＋評価）</option>
+        <option value="8">けむたくん Lv8（先読み2手）</option>
+        <option value="9">けむたくん Lv9（先読み2手＋評価）</option>
+        <option value="10">けむたくん Lv10（先読み3手＋安全手優先）</option>
+    </select>
+    <button id="btn-undo">Undo</button>
+    <button id="btn-pass">Pass</button>
+    <button id="btn-hint">Hint</button>
+    <button id="btn-restart">Restart</button>
 </div>
 
 <div id="board" class="board"></div>
 
 <div class="scoreboard">
-<div>手番: <span id="turnText">黒</span></div>
-<div>黒 (はむたくん): <span id="blackScore">2</span></div>
-<div>白 (けむたくん): <span id="whiteScore">2</span></div>
+    <div>手番: <span id="turnText">黒</span></div>
+    <div>黒 (はむたくん): <span id="blackScore">2</span></div>
+    <div>白 (けむたくん): <span id="whiteScore">2</span></div>
 </div>
 
 <div id="status"></div>
@@ -68,10 +121,10 @@ const btnHint=document.getElementById('btn-hint');
 const btnPass=document.getElementById('btn-pass');
 const levelSelect=document.getElementById('levelSelect');
 
-let state={board:createInitialBoard(), turn:BLACK, showHints:true, history:[], level:1};
+let state = { board:createInitialBoard(), turn:BLACK, showHints:true, history:[], level:1 };
 
 function createInitialBoard(){
-    const b=Array.from({length:SIZE}, ()=>Array(SIZE).fill(EMPTY));
+    const b=Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
     const mid=SIZE/2;
     b[mid-1][mid-1]=WHITE; b[mid][mid]=WHITE;
     b[mid-1][mid]=BLACK; b[mid][mid-1]=BLACK;
@@ -87,10 +140,10 @@ function getLegalMoves(board,player){
         const flipsAll=[];
         for(const [dr,dc] of DIRS){
             let i=r+dr,j=c+dc,st=[];
-            while(inBounds(i,j)&&board[i][j]===-player){ st.push([i,j]); i+=dr;j+=dc; }
-            if(st.length>0 && inBounds(i,j) && board[i][j]===player) flipsAll.push(...st);
+            while(inBounds(i,j)&&board[i][j]===-player){st.push([i,j]); i+=dr;j+=dc;}
+            if(st.length>0&&inBounds(i,j)&&board[i][j]===player) flipsAll.push(...st);
         }
-        if(flipsAll.length>0) moves.set(`${r},${c}`, flipsAll);
+        if(flipsAll.length>0) moves.set(`${r},${c}`,flipsAll);
     }
     return moves;
 }
@@ -174,7 +227,7 @@ function minimax(board,depth,player,level){
         const newBoard=applyMove(board,r,c,player,flips);
         const val=minimax(newBoard,depth-1,-player,level);
         if(player===WHITE){ if(val>best) best=val; }
-        else { if(val<best) best=val; }
+        else{ if(val<best) best=val; }
     }
     return best;
 }
