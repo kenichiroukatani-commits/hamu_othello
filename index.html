@@ -105,6 +105,11 @@
             word-break: break-word;
         }
 
+        .square.cpu-move {
+            box-shadow: 0 0 15px 5px yellow;
+            transition: box-shadow 0.3s ease;
+        }
+
         @media(max-width:400px) {
             .title {
                 font-size: 1.5rem;
@@ -202,7 +207,7 @@
         const levelSelect = document.getElementById('levelSelect');
 
         let state = { board: createInitialBoard(), turn: BLACK, showHints: true, history: [], level: 1 };
-
+        let lastCpuMove = null; // CPUの最後の手を記録
         function createInitialBoard() {
             const b = Array.from({ length: SIZE }, () => Array(SIZE).fill(EMPTY));
             const mid = SIZE / 2;
@@ -274,11 +279,22 @@
             state.turn *= -1;
             render();
             if (state.turn === WHITE) {
-                const delay = 1000 + Math.random() * 1000; // 1〜2秒ランダム
-                setTimeout(cpuMove, delay);
+                const legalWhite = getLegalMoves(state.board, WHITE);
+                if (legalWhite.size === 0) { state.turn = BLACK; render(); return; }
+                const move = chooseMove(legalWhite, state.level, state.board, WHITE);
+                if (move) {
+                    lastCpuMove = move; // CPUの手を記録
+                    const delay = 1000 + Math.random() * 1000; // 1〜2秒ランダムで人間っぽく
+                    setTimeout(() => {
+                        makeMove(move[0], move[1]);
+                        highlightMove(lastCpuMove[0], lastCpuMove[1]); // 光らせる
+                    }, delay);
+                }
             }
 
         }
+
+
 
         function cpuMove() {
             const legal = getLegalMoves(state.board, WHITE);
@@ -352,6 +368,14 @@
         levelSelect.addEventListener('change', () => { state.level = +levelSelect.value; });
 
         render();
+        function highlightMove(r, c) {
+            const squares = document.querySelectorAll('.square');
+            const sq = Array.from(squares).find(s => +s.dataset.r === r && +s.dataset.c === c);
+            if (!sq) return;
+            sq.classList.add('cpu-move');
+            setTimeout(() => sq.classList.remove('cpu-move'), 1000); // 1秒後に消える
+        }
+
         const kemutakunEl = document.getElementById('kemutakun');
         let kemuOffset = 0;        // 中央からの相対オフセット
         let kemuDir = 1;           // 1=右, -1=左
