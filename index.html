@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>はむたくん、オセロで勝負だ！</title>
+<title>はむたくん、オセロ完全版</title>
 <style>
 body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px;background:#f0f0f0;margin:0;}
 .title{font-size:2rem;font-weight:bold;text-align:center;}
@@ -12,28 +12,22 @@ body{font-family:sans-serif;display:flex;flex-direction:column;align-items:cente
 .controls select,.controls button{padding:5px 10px;font-size:1rem;}
 .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:2px;width:90vw;max-width:500px;aspect-ratio:1;margin-top:10px;}
 .square{width:100%;height:100%;background:green;border:1px solid #000;position:relative;cursor:pointer;}
-.disc{width:80%;height:80%;border-radius:50%;position:absolute;top:10%;left:10%;}
+.disc{width:80%;height:80%;border-radius:50%;position:absolute;top:10%;left:10%;transition: background 0.3s;}
 .disc.black{background:black;}
 .disc.white{background:white;}
+.disc.cpu-temp{background:red;}
 .hint{background:lightgreen;}
 .scoreboard{margin-top:10px;display:flex;gap:15px;font-size:1rem;flex-wrap:wrap;justify-content:center;}
 .scoreboard span{font-weight:bold;}
 #status{margin-top:10px;font-size:1.2rem;font-weight:bold;text-align:center;word-break:break-word;}
-.square.cpu-move{box-shadow:0 0 15px 5px yellow;transition:box-shadow 0.3s ease;}
 @media(max-width:400px){.title{font-size:1.5rem;}.subtitle{font-size:0.9rem;}.controls select,.controls button{font-size:0.9rem;padding:4px 8px;}.scoreboard{font-size:0.9rem;}}
-#kemutakun-container{position:relative;width:80%;height:20vw;margin:0 auto 10px;}
-#kemutakun{position:absolute;top:0;left:50%;transform:translateX(-50%);width:20%;}
 #recordText{margin-top:10px;font-weight:bold;}
 </style>
 </head>
 <body>
 
-<div class="title">はむたくん、オセロで勝負だ！</div>
+<div class="title">はむたくん、オセロ完全版</div>
 <div class="subtitle">CPU対戦のみ。対戦相手は「けむたくん」！</div>
-
-<div id="kemutakun-container">
-<img src="kemutakun.png" id="kemutakun" alt="けむたくん">
-</div>
 
 <div class="controls">
 <select id="levelSelect">
@@ -43,7 +37,7 @@ body{font-family:sans-serif;display:flex;flex-direction:column;align-items:cente
   <option value="4">Lv4（けっちむ）</option>
   <option value="5">Lv5（けむた）</option>
   <option value="6">Lv6（はっちけっち）</option>
-  <option value="7">Lv7（みにだけちお）</option>
+  <option value="7" selected>Lv7（みにだけちお）</option>
 </select>
 <button id="btn-undo">Undo</button>
 <button id="btn-pass">Pass</button>
@@ -71,9 +65,10 @@ const btnUndo=document.getElementById('btn-undo'),btnHint=document.getElementByI
 const btnPass=document.getElementById('btn-pass'),levelSelect=document.getElementById('levelSelect');
 const recordText=document.getElementById('recordText');
 
-let state={board:createInitialBoard(),turn:BLACK,showHints:true,history:[],level:1};
-let lastCpuMove=null;
+let state={board:createInitialBoard(),turn:BLACK,showHints:true,history:[],level:7,isCpuThinking:false};
 let record={black:0,white:0,lastWinner:null};
+const savedRecord = JSON.parse(localStorage.getItem('othelloRecord'));
+if(savedRecord) record = savedRecord;
 
 function createInitialBoard(){
     const b=Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
@@ -98,11 +93,14 @@ function getLegalMoves(board,player){
     }
     return moves;
 }
+
 function applyMove(board,r,c,player,flips){
-    const next=board.map(row=>row.slice());next[r][c]=player;
-    for(const [i,j] of flips)next[i][j]=player;
+    const next=board.map(row=>row.slice());
+    next[r][c]=player;
+    flips.forEach(([i,j])=>next[i][j]=player);
     return next;
 }
+
 function score(board){
     let black=0,white=0;
     for(const row of board)for(const v of row){if(v===BLACK)black++;else if(v===WHITE)white++;}
@@ -113,92 +111,137 @@ function render(){
     boardEl.innerHTML='';
     const legal=getLegalMoves(state.board,state.turn);
     for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
-        const sq=document.createElement('button');sq.className='square';sq.dataset.r=r;sq.dataset.c=c;
+        const sq=document.createElement('button');
+        sq.className='square';
+        sq.dataset.r=r;
+        sq.dataset.c=c;
         const v=state.board[r][c];
-        if(v!==EMPTY){const d=document.createElement('div');d.className='disc '+(v===BLACK?'black':'white');sq.appendChild(d);}
-        else if(legal.has(`${r},${c}`)&&state.showHints)sq.classList.add('hint');
+        if(v!==EMPTY){
+            const d=document.createElement('div');
+            d.className='disc '+(v===BLACK?'black':'white');
+            sq.appendChild(d);
+        } else if(legal.has(`${r},${c}`)&&state.showHints)sq.classList.add('hint');
         sq.addEventListener('click',onPlace);
         boardEl.appendChild(sq);
     }
     const {black,white}=score(state.board);
-    blackScoreEl.textContent=black;whiteScoreEl.textContent=white;
+    blackScoreEl.textContent=black; whiteScoreEl.textContent=white;
     turnText.textContent=state.turn===BLACK?'黒':'白';
     checkGameOver();
+    updateRecordText();
 }
 
-function onPlace(e){const r=+e.currentTarget.dataset.r;const c=+e.currentTarget.dataset.c;makeMove(r,c);}
+function onPlace(e){
+    if(state.isCpuThinking) return;
+    const r=+e.currentTarget.dataset.r;
+    const c=+e.currentTarget.dataset.c;
+    makeMove(r,c);
+}
+
 function makeMove(r,c){
     const legal=getLegalMoves(state.board,state.turn);
     const key=`${r},${c}`;
-    if(!legal.has(key))return;
+    if(!legal.has(key)) return;
+
     pushHistory();
     state.board=applyMove(state.board,r,c,state.turn,legal.get(key));
-    state.turn*=-1;
-    render();
-    if(state.turn===WHITE){
-        const legalWhite=getLegalMoves(state.board,WHITE);
-        if(legalWhite.size===0){state.turn=BLACK;render();return;}
-        const move=chooseMove(legalWhite,state.level,state.board,WHITE);
-        if(move){
-            lastCpuMove=move;
-            const delay=500+Math.random()*1000;
-            setTimeout(()=>{makeMove(move[0],move[1]);highlightMove(lastCpuMove[0],lastCpuMove[1]);},delay);
-        }
+    render(); // 黒を描画
+    state.turn=WHITE;
+
+    const legalWhite=getLegalMoves(state.board,WHITE);
+    if(legalWhite.size===0){ 
+        state.turn=BLACK; 
+        render(); 
+        return;
     }
+
+    state.isCpuThinking=true;
+    setTimeout(()=>{
+        const move=chooseMove(legalWhite,state.level,state.board,WHITE);
+        if(!move){ state.turn=BLACK; state.isCpuThinking=false; render(); return; }
+
+        const flips=legalWhite.get(`${move[0]},${move[1]}`);
+        state.board=applyMove(state.board,move[0],move[1],WHITE,flips);
+
+        // --- 赤表示をDOMに直接追加 ---
+        const sq=Array.from(document.querySelectorAll('.square'))
+                      .find(s=>+s.dataset.r===move[0] && +s.dataset.c===move[1]);
+        if(sq){
+            sq.innerHTML=''; // まず空に
+            const disc=document.createElement('div');
+            disc.className='disc cpu-temp';
+            sq.appendChild(disc);
+        }
+
+        // 1秒後に正式な白石に置き換え
+        setTimeout(()=>{
+            if(sq){
+                sq.innerHTML='';
+                const disc=document.createElement('div');
+                disc.className='disc white';
+                sq.appendChild(disc);
+            }
+            state.turn=BLACK;
+            state.isCpuThinking=false;
+            render();
+        },1000);
+
+    },1000);
+}
+
+// 評価関数・アルファベータ省略（前コードと同じ）
+function evaluateBoard(board){
+    const WEIGHTS=[[20,-3,11,8,8,11,-3,20],[-3,-7,-4,1,1,-4,-7,-3],[11,-4,2,2,2,2,-4,11],[8,1,2,0,0,2,1,8],[8,1,2,0,0,2,1,8],[11,-4,2,2,2,2,-4,11],[-3,-7,-4,1,1,-4,-7,-3],[20,-3,11,8,8,11,-3,20]];
+    let val=0;
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+        if(board[r][c]===WHITE) val+=WEIGHTS[r][c];
+        else if(board[r][c]===BLACK) val-=WEIGHTS[r][c];
+    }
+    return val;
 }
 
 function chooseMove(legal,level,board,player){
     const moves=[...legal.keys()].map(k=>k.split(',').map(Number));
-    if(level===1)return moves[Math.floor(Math.random()*moves.length)];
-    let bestVal=-Infinity,bestMove=null,depth=1;
-    if(level===7)depth=4;
-    else if(level===6)depth=3;
-    else if(level===5)depth=2;
-    else depth=1;
+    if(level<=1) return moves[Math.floor(Math.random()*moves.length)];
+    let bestVal=-Infinity,bestMove=null;
+    let depth=level>=7?4:level>=5?3:2;
     for(const [r,c] of moves){
         const flips=legal.get(`${r},${c}`);
-        let val=minimax(applyMove(board,r,c,player,flips),depth,-player,level,true);
+        const val=alphabeta(applyMove(board,r,c,player,flips),depth,-Infinity,Infinity,-player,true);
         if(val>bestVal){bestVal=val;bestMove=[r,c];}
     }
     return bestMove;
 }
 
-function minimax(board,depth,player,level,isRoot=false){
-    if(depth===0)return evaluateBoard(board,player,level);
+function alphabeta(board,depth,alpha,beta,player,isMax){
     const legal=getLegalMoves(board,player);
-    if(legal.size===0)return evaluateBoard(board,player,level);
-    let best=(player===WHITE)?-Infinity:Infinity;
-    for(const key of legal.keys()){
-        const [r,c]=key.split(',').map(Number);
-        const flips=legal.get(key);
-        const newBoard=applyMove(board,r,c,player,flips);
-        const val=minimax(newBoard,depth-1,-player,level);
-        if(player===WHITE){if(val>best)best=val;}else{if(val<best)best=val;}
+    if(depth===0 || legal.size===0) return evaluateBoard(board);
+    if(isMax){
+        let val=-Infinity;
+        for(const key of legal.keys()){
+            const [r,c]=key.split(',').map(Number);
+            const flips=legal.get(key);
+            val=Math.max(val, alphabeta(applyMove(board,r,c,player,flips),depth-1,alpha,beta,-player,false));
+            alpha=Math.max(alpha,val);
+            if(beta<=alpha) break;
+        }
+        return val;
+    } else {
+        let val=Infinity;
+        for(const key of legal.keys()){
+            const [r,c]=key.split(',').map(Number);
+            const flips=legal.get(key);
+            val=Math.min(val, alphabeta(applyMove(board,r,c,player,flips),depth-1,alpha,beta,-player,true));
+            beta=Math.min(beta,val);
+            if(beta<=alpha) break;
+        }
+        return val;
     }
-    return best;
-}
-
-function evaluateBoard(board,player,level){
-    const weightCorner=25,weightEdge=5,weightMobility=2,weightStone=1;
-    let val=0;
-    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){if(board[r][c]===WHITE)val+=weightStone;else if(board[r][c]===BLACK)val-=weightStone;}
-    const corners=[[0,0],[0,7],[7,0],[7,7]];
-    for(const [r,c] of corners){if(board[r][c]===WHITE)val+=weightCorner;else if(board[r][c]===BLACK)val-=weightCorner;}
-    for(let i=1;i<SIZE-1;i++){
-        if(board[0][i]===WHITE||board[7][i]===WHITE||board[i][0]===WHITE||board[i][7]===WHITE)val+=weightEdge;
-        if(board[0][i]===BLACK||board[7][i]===BLACK||board[i][0]===BLACK||board[i][7]===BLACK)val-=weightEdge;
-    }
-    const myMoves=getLegalMoves(board,WHITE).size;
-    const oppMoves=getLegalMoves(board,BLACK).size;
-    val+=weightMobility*(myMoves-oppMoves);
-    const dangerSquares=[[0,1],[1,0],[1,1],[0,6],[1,6],[1,7],[6,0],[6,1],[7,1],[6,6],[6,7],[7,6]];
-    for(const [r,c] of dangerSquares){if(board[r][c]===WHITE)val-=3;else if(board[r][c]===BLACK)val+=3;}
-    return val;
 }
 
 function pushHistory(){state.history.push({board:state.board.map(r=>r.slice()),turn:state.turn});}
-function undo(){const prev=state.history.pop();if(prev){state.board=prev.board;state.turn=prev.turn;render();}}
-function restart(){state.board=createInitialBoard();state.turn=BLACK;state.history=[];statusEl.textContent='';render();state.turn=BLACK;}
+function undo(){if(state.history.length>=2){state.history.pop(); const prev=state.history.pop(); if(prev){state.board=prev.board;state.turn=prev.turn;render();}}}
+function restart(){state.board=createInitialBoard();state.turn=BLACK;state.history=[];statusEl.textContent='';render();}
 function toggleHint(){state.showHints=!state.showHints;render();}
 
 function checkGameOver(){
@@ -207,8 +250,8 @@ function checkGameOver(){
     if(legalBlack.size===0 && legalWhite.size===0){
         const {black,white}=score(state.board);
         let winner=null;
-        if(black>white)winner='black';
-        else if(white>black)winner='white';
+        if(black>white) winner='black';
+        else if(white>black) winner='white';
         if(winner){
             statusEl.textContent=winner==='black'?'勝者: はむたくん (黒)！':'勝者: けむたくん (白)！';
             updateRecord(winner);
@@ -221,30 +264,15 @@ function updateRecord(winner){
     if(winner==='black')record.black++;
     else if(winner==='white')record.white++;
     record.lastWinner=winner;
-    recordText.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;
+    localStorage.setItem('othelloRecord', JSON.stringify(record));
 }
 
-function highlightMove(r,c){
-    const squares=document.querySelectorAll('.square');
-    const sq=Array.from(squares).find(s=>+s.dataset.r===r && +s.dataset.c===c);
-    if(!sq)return;
-    sq.classList.add('cpu-move');
-    setTimeout(()=>sq.classList.remove('cpu-move'),1000);
-}
-
-const kemutakunEl=document.getElementById('kemutakun');
-let kemuOffset=0,kemuDir=1;
-const kemuSpeed=10,kemuMax=50;
-setInterval(()=>{
-    kemuOffset+=kemuSpeed*kemuDir;
-    if(kemuOffset>kemuMax||kemuOffset<-kemuMax)kemuDir*=-1;
-    kemutakunEl.style.transform=`translateX(-50%) translateX(${kemuOffset}px)`;
-},200);
+function updateRecordText(){recordText.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;}
 
 btnRestart.addEventListener('click',restart);
 btnUndo.addEventListener('click',undo);
 btnHint.addEventListener('click',toggleHint);
-btnPass.addEventListener('click',()=>{state.turn*=-1;render();});
+btnPass.addEventListener('click',()=>{if(!state.isCpuThinking){state.turn*=-1;render();}});
 levelSelect.addEventListener('change',()=>{state.level=+levelSelect.value;});
 
 render();
