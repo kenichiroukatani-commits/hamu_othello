@@ -12,7 +12,7 @@ body{font-family:sans-serif;display:flex;flex-direction:column;align-items:cente
 .controls select,.controls button{padding:5px 10px;font-size:1rem;}
 .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:2px;width:90vw;max-width:500px;aspect-ratio:1;margin-top:10px;}
 .square{width:100%;height:100%;background:green;border:1px solid #000;position:relative;cursor:pointer;}
-.disc{width:80%;height:80%;border-radius:50%;position:absolute;top:10%;left:10%;transition: background 0.3s;}
+.disc{width:80%;height:80%;border-radius:50%;position:absolute;top:10%;left:10%;transition:background 0.3s;}
 .disc.black{background:black;}
 .disc.white{background:white;}
 .disc.cpu-temp{background:red;}
@@ -22,12 +22,15 @@ body{font-family:sans-serif;display:flex;flex-direction:column;align-items:cente
 #status{margin-top:10px;font-size:1.2rem;font-weight:bold;text-align:center;word-break:break-word;}
 @media(max-width:400px){.title{font-size:1.5rem;}.subtitle{font-size:0.9rem;}.controls select,.controls button{font-size:0.9rem;padding:4px 8px;}.scoreboard{font-size:0.9rem;}}
 #recordText{margin-top:10px;font-weight:bold;}
+#kemutakun-container{position:relative;width:80%;height:20vw;margin:0 auto 10px;}
+#kemutakun{position:absolute;top:0;left:50%;transform:translateX(-50%);width:20%;}
 </style>
 </head>
 <body>
 
 <div class="title">はむたくん、オセロ完全版</div>
 <div class="subtitle">CPU対戦のみ。対戦相手は「けむたくん」！</div>
+<div id="kemutakun-container"><img src="kemutakun.png" id="kemutakun" alt="けむたくん"></div>
 
 <div class="controls">
 <select id="levelSelect">
@@ -57,19 +60,26 @@ body{font-family:sans-serif;display:flex;flex-direction:column;align-items:cente
 <div id="recordText">はむたくん 0勝 / けむたくん 0勝</div>
 
 <script>
+// --- 定数 ---
 const SIZE=8,EMPTY=0,BLACK=1,WHITE=-1;
+const DIRS=[[ -1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+
+// --- DOM ---
 const boardEl=document.getElementById('board'),turnText=document.getElementById('turnText');
 const blackScoreEl=document.getElementById('blackScore'),whiteScoreEl=document.getElementById('whiteScore');
-const statusEl=document.getElementById('status'),btnRestart=document.getElementById('btn-restart');
-const btnUndo=document.getElementById('btn-undo'),btnHint=document.getElementById('btn-hint');
-const btnPass=document.getElementById('btn-pass'),levelSelect=document.getElementById('levelSelect');
-const recordText=document.getElementById('recordText');
+const statusEl=document.getElementById('status'),recordTextEl=document.getElementById('recordText');
+const btnRestart=document.getElementById('btn-restart'),btnUndo=document.getElementById('btn-undo');
+const btnPass=document.getElementById('btn-pass'),btnHint=document.getElementById('btn-hint');
+const levelSelect=document.getElementById('levelSelect');
+const kemutakunEl=document.getElementById('kemutakun');
 
+// --- ゲーム状態 ---
 let state={board:createInitialBoard(),turn:BLACK,showHints:true,history:[],level:7,isCpuThinking:false};
 let record={black:0,white:0,lastWinner:null};
 const savedRecord = JSON.parse(localStorage.getItem('othelloRecord'));
 if(savedRecord) record = savedRecord;
 
+// --- 初期盤面 ---
 function createInitialBoard(){
     const b=Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
     const mid=SIZE/2;
@@ -77,7 +87,7 @@ function createInitialBoard(){
     return b;
 }
 
-const DIRS=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+// --- ゲームロジック ---
 function inBounds(r,c){return r>=0&&r<SIZE&&c>=0&&c<SIZE;}
 function getLegalMoves(board,player){
     const moves=new Map();
@@ -107,20 +117,16 @@ function score(board){
     return {black,white};
 }
 
+// --- 描画 ---
 function render(){
     boardEl.innerHTML='';
     const legal=getLegalMoves(state.board,state.turn);
     for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
         const sq=document.createElement('button');
-        sq.className='square';
-        sq.dataset.r=r;
-        sq.dataset.c=c;
+        sq.className='square'; sq.dataset.r=r; sq.dataset.c=c;
         const v=state.board[r][c];
-        if(v!==EMPTY){
-            const d=document.createElement('div');
-            d.className='disc '+(v===BLACK?'black':'white');
-            sq.appendChild(d);
-        } else if(legal.has(`${r},${c}`)&&state.showHints)sq.classList.add('hint');
+        if(v!==EMPTY){const d=document.createElement('div'); d.className='disc '+(v===BLACK?'black':'white'); sq.appendChild(d);}
+        else if(legal.has(`${r},${c}`)&&state.showHints) sq.classList.add('hint');
         sq.addEventListener('click',onPlace);
         boardEl.appendChild(sq);
     }
@@ -131,6 +137,7 @@ function render(){
     updateRecordText();
 }
 
+// --- プレイヤー操作 ---
 function onPlace(e){
     if(state.isCpuThinking) return;
     const r=+e.currentTarget.dataset.r;
@@ -138,6 +145,7 @@ function onPlace(e){
     makeMove(r,c);
 }
 
+// --- 移動処理 ---
 function makeMove(r,c){
     const legal=getLegalMoves(state.board,state.turn);
     const key=`${r},${c}`;
@@ -145,70 +153,46 @@ function makeMove(r,c){
 
     pushHistory();
     state.board=applyMove(state.board,r,c,state.turn,legal.get(key));
-    render(); // 黒を描画
-    state.turn=WHITE;
+    render();
+    state.turn*=-1;
 
-    const legalWhite=getLegalMoves(state.board,WHITE);
-    if(legalWhite.size===0){ 
-        state.turn=BLACK; 
-        render(); 
-        return;
-    }
-
-    state.isCpuThinking=true;
-    setTimeout(()=>{
-        const move=chooseMove(legalWhite,state.level,state.board,WHITE);
-        if(!move){ state.turn=BLACK; state.isCpuThinking=false; render(); return; }
-
-        const flips=legalWhite.get(`${move[0]},${move[1]}`);
-        state.board=applyMove(state.board,move[0],move[1],WHITE,flips);
-
-        // --- 赤表示をDOMに直接追加 ---
-        const sq=Array.from(document.querySelectorAll('.square'))
-                      .find(s=>+s.dataset.r===move[0] && +s.dataset.c===move[1]);
-        if(sq){
-            sq.innerHTML=''; // まず空に
-            const disc=document.createElement('div');
-            disc.className='disc cpu-temp';
-            sq.appendChild(disc);
-        }
-
-        // 1秒後に正式な白石に置き換え
+    if(state.turn===WHITE){
+        const legalWhite=getLegalMoves(state.board,WHITE);
+        if(legalWhite.size===0){state.turn=BLACK; render(); return;}
+        state.isCpuThinking=true;
         setTimeout(()=>{
+            const move=chooseMove(legalWhite,state.level,state.board,WHITE);
+            if(!move){state.turn=BLACK; state.isCpuThinking=false; render(); return;}
+            const flips=legalWhite.get(`${move[0]},${move[1]}`);
+            state.board=applyMove(state.board,move[0],move[1],WHITE,flips);
+
+            // 赤石表示
+            const sq=Array.from(document.querySelectorAll('.square'))
+                        .find(s=>+s.dataset.r===move[0]&&+s.dataset.c===move[1]);
             if(sq){
                 sq.innerHTML='';
-                const disc=document.createElement('div');
-                disc.className='disc white';
-                sq.appendChild(disc);
+                const disc=document.createElement('div'); disc.className='disc cpu-temp'; sq.appendChild(disc);
             }
-            state.turn=BLACK;
-            state.isCpuThinking=false;
-            render();
+
+            setTimeout(()=>{
+                state.turn=BLACK;
+                state.isCpuThinking=false;
+                render();
+            },1000);
         },1000);
-
-    },1000);
-}
-
-// 評価関数・アルファベータ省略（前コードと同じ）
-function evaluateBoard(board){
-    const WEIGHTS=[[20,-3,11,8,8,11,-3,20],[-3,-7,-4,1,1,-4,-7,-3],[11,-4,2,2,2,2,-4,11],[8,1,2,0,0,2,1,8],[8,1,2,0,0,2,1,8],[11,-4,2,2,2,2,-4,11],[-3,-7,-4,1,1,-4,-7,-3],[20,-3,11,8,8,11,-3,20]];
-    let val=0;
-    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
-        if(board[r][c]===WHITE) val+=WEIGHTS[r][c];
-        else if(board[r][c]===BLACK) val-=WEIGHTS[r][c];
     }
-    return val;
 }
 
+// --- CPUアルゴリズム ---
 function chooseMove(legal,level,board,player){
     const moves=[...legal.keys()].map(k=>k.split(',').map(Number));
     if(level<=1) return moves[Math.floor(Math.random()*moves.length)];
     let bestVal=-Infinity,bestMove=null;
-    let depth=level>=7?4:level>=5?3:2;
+    const depth=level>=7?4:level>=5?3:2;
     for(const [r,c] of moves){
         const flips=legal.get(`${r},${c}`);
         const val=alphabeta(applyMove(board,r,c,player,flips),depth,-Infinity,Infinity,-player,true);
-        if(val>bestVal){bestVal=val;bestMove=[r,c];}
+        if(val>bestVal){bestVal=val; bestMove=[r,c];}
     }
     return bestMove;
 }
@@ -226,7 +210,7 @@ function alphabeta(board,depth,alpha,beta,player,isMax){
             if(beta<=alpha) break;
         }
         return val;
-    } else {
+    }else{
         let val=Infinity;
         for(const key of legal.keys()){
             const [r,c]=key.split(',').map(Number);
@@ -239,11 +223,23 @@ function alphabeta(board,depth,alpha,beta,player,isMax){
     }
 }
 
-function pushHistory(){state.history.push({board:state.board.map(r=>r.slice()),turn:state.turn});}
-function undo(){if(state.history.length>=2){state.history.pop(); const prev=state.history.pop(); if(prev){state.board=prev.board;state.turn=prev.turn;render();}}}
-function restart(){state.board=createInitialBoard();state.turn=BLACK;state.history=[];statusEl.textContent='';render();}
-function toggleHint(){state.showHints=!state.showHints;render();}
+function evaluateBoard(board){
+    const WEIGHTS=[[20,-3,11,8,8,11,-3,20],[-3,-7,-4,1,1,-4,-7,-3],[11,-4,2,2,2,2,-4,11],[8,1,2,0,0,2,1,8],[8,1,2,0,0,2,1,8],[11,-4,2,2,2,2,-4,11],[-3,-7,-4,1,1,-4,-7,-3],[20,-3,11,8,8,11,-3,20]];
+    let val=0;
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+        if(board[r][c]===WHITE) val+=WEIGHTS[r][c];
+        else if(board[r][c]===BLACK) val-=WEIGHTS[r][c];
+    }
+    return val;
+}
 
+// --- ヒストリー ---
+function pushHistory(){state.history.push({board:state.board.map(r=>r.slice()),turn:state.turn});}
+function undo(){if(state.history.length>=2){state.history.pop(); const prev=state.history.pop(); if(prev){state.board=prev.board; state.turn=prev.turn; render();}}}
+function restart(){state.board=createInitialBoard(); state.turn=BLACK; state.history=[];statusEl.textContent='';render();}
+function toggleHint(){state.showHints=!state.showHints; render();}
+
+// --- 勝敗チェック ---
 function checkGameOver(){
     const legalBlack=getLegalMoves(state.board,BLACK);
     const legalWhite=getLegalMoves(state.board,WHITE);
@@ -252,29 +248,37 @@ function checkGameOver(){
         let winner=null;
         if(black>white) winner='black';
         else if(white>black) winner='white';
-        if(winner){
-            statusEl.textContent=winner==='black'?'勝者: はむたくん (黒)！':'勝者: けむたくん (白)！';
-            updateRecord(winner);
-        }
+        if(winner){ statusEl.textContent=winner==='black'?'勝者: はむたくん (黒)！':'勝者: けむたくん (白)！'; updateRecord(winner);}
     }
 }
 
 function updateRecord(winner){
-    if(record.lastWinner===winner)return;
-    if(winner==='black')record.black++;
-    else if(winner==='white')record.white++;
+    if(record.lastWinner===winner) return;
+    if(winner==='black') record.black++;
+    else if(winner==='white') record.white++;
     record.lastWinner=winner;
-    localStorage.setItem('othelloRecord', JSON.stringify(record));
+    localStorage.setItem('othelloRecord',JSON.stringify(record));
 }
 
-function updateRecordText(){recordText.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;}
+function updateRecordText(){recordTextEl.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;}
 
+// --- イベント ---
 btnRestart.addEventListener('click',restart);
 btnUndo.addEventListener('click',undo);
 btnHint.addEventListener('click',toggleHint);
-btnPass.addEventListener('click',()=>{if(!state.isCpuThinking){state.turn*=-1;render();}});
+btnPass.addEventListener('click',()=>{state.turn*=-1;render();});
 levelSelect.addEventListener('change',()=>{state.level=+levelSelect.value;});
 
+// --- けむたくんアニメーション ---
+let kemuOffset=0,kemuDir=1;
+const kemuSpeed=10,kemuMax=50;
+setInterval(()=>{
+  kemuOffset+=kemuSpeed*kemuDir;
+  if(kemuOffset>kemuMax||kemuOffset<-kemuMax) kemuDir*=-1;
+  kemutakunEl.style.transform=`translateX(-50%) translateX(${kemuOffset}px)`;
+},200);
+
+// --- 初回描画 ---
 render();
 </script>
 </body>
