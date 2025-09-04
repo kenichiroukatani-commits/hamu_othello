@@ -1,284 +1,436 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>はむたくん、オセロ完全版</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>はむたくん、オセロ完全版＋自動パス</title>
 <style>
-body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px;background:#f0f0f0;margin:0;}
-.title{font-size:2rem;font-weight:bold;text-align:center;}
-.subtitle{font-size:1rem;color:#555;margin-bottom:10px;text-align:center;}
-.controls{margin:10px 0;display:flex;flex-wrap:wrap;justify-content:center;gap:5px;}
-.controls select,.controls button{padding:5px 10px;font-size:1rem;}
-.board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:2px;width:90vw;max-width:500px;aspect-ratio:1;margin-top:10px;}
-.square{width:100%;height:100%;background:green;border:1px solid #000;position:relative;cursor:pointer;}
-.disc{width:80%;height:80%;border-radius:50%;position:absolute;top:10%;left:10%;transition:background 0.3s;}
-.disc.black{background:black;}
-.disc.white{background:white;}
-.disc.cpu-temp{background:red;}
-.hint{background:lightgreen;}
-.scoreboard{margin-top:10px;display:flex;gap:15px;font-size:1rem;flex-wrap:wrap;justify-content:center;}
-.scoreboard span{font-weight:bold;}
-#status{margin-top:10px;font-size:1.2rem;font-weight:bold;text-align:center;word-break:break-word;}
-@media(max-width:400px){.title{font-size:1.5rem;}.subtitle{font-size:0.9rem;}.controls select,.controls button{font-size:0.9rem;padding:4px 8px;}.scoreboard{font-size:0.9rem;}}
-#recordText{margin-top:10px;font-weight:bold;}
-#kemutakun-container{position:relative;width:80%;height:20vw;margin:0 auto 10px;}
-#kemutakun{position:absolute;top:0;left:50%;transform:translateX(-50%);width:20%;}
+/* ―― レイアウト ―― */
+body{font-family:sans-serif;margin:0;padding:20px;background:#f7f7f7;
+     display:flex;flex-direction:column;align-items:center}
+.title{font-size:2rem;font-weight:bold;text-align:center;margin:0 0 10px}
+.subtitle{font-size:1rem;color:#555;margin-bottom:10px;text-align:center}
+
+
+/* ―― 操作パネル ―― */
+.controls{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;width:300px;margin-bottom:10px}
+.controls select,.controls button{padding:6px 12px;font-size:1rem;cursor:pointer}
+
+
+/* ―― 盤面 ―― */
+.board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+        gap:2px;width:90vw;max-width:480px;aspect-ratio:1;margin-top:10px}
+.square{width:100%;height:100%;background:#087f23;border:1px solid #004d00;position:relative;
+        cursor:pointer;border-radius:4px}
+.square.disabled{pointer-events:none;opacity:0.7}
+
+
+/* ―― 石 ―― */
+.disc{width:80%;height:80%;border-radius:50%;position:absolute;top:10%;left:10%;
+      transition:transform .2s ease}
+.disc.black{background:#111;box-shadow:inset 0 0 6px rgba(255,255,255,.2)}
+.disc.white{background:#fafafa;box-shadow:inset 0 0 6px rgba(0,0,0,.2)}
+.disc.cpu-temp{background:#e53935}               /* 赤ハイライト */
+.hint{outline:3px dashed rgba(255,255,255,.6);outline-offset:-6px}
+
+
+/* ―― 情報表示 ―― */
+.scoreboard{margin-top:10px;display:flex;gap:16px;font-size:1rem;flex-wrap:wrap;justify-content:center}
+.scoreboard span{font-weight:bold}
+#status{margin-top:10px;font-size:1.1rem;font-weight:bold;text-align:center;
+        word-break:break-word;min-height:1.4em}
+#recordText{margin-top:10px;font-weight:bold}
+.hide{display:none!important}
+
+
+/* ―― 勝利／敗北演出 ―― */
+#hamWin{display:none;width:240px;max-width:80vw;margin-top:25px}
+#hamMsg{display:none;font-size:1.4rem;font-weight:bold;margin-top:10px;text-align:center}
+
+
+/* ―― モバイル調整 ―― */
+@media(max-width:400px){
+  .title{font-size:1.5rem}.subtitle{font-size:0.9rem}
+  .controls select,.controls button{font-size:0.9rem;padding:4px 8px}
+  .scoreboard{font-size:0.9rem}
+}
 </style>
 </head>
 <body>
 
-<div class="title">はむたくん、オセロ完全版</div>
-<div class="subtitle">CPU対戦のみ。対戦相手は「けむたくん」！</div>
-<div id="kemutakun-container"><img src="kemutakun.png" id="kemutakun" alt="けむたくん"></div>
 
+<div class="title">はむたくん、オセロ完全版＋</div>
+<div class="subtitle">合法手が無ければ自動パス & 黒勝利で祝福！</div>
+
+
+<!-- 操作パネル -->
 <div class="controls">
-<select id="levelSelect">
-  <option value="1">Lv1（けむ）</option>
-  <option value="2">Lv2（けむお）</option>
-  <option value="3">Lv3（けっち）</option>
-  <option value="4">Lv4（けっちむ）</option>
-  <option value="5">Lv5（けむた）</option>
-  <option value="6">Lv6（はっちけっち）</option>
-  <option value="7" selected>Lv7（みにだけちお）</option>
-</select>
-<button id="btn-undo">Undo</button>
-<button id="btn-pass">Pass</button>
-<button id="btn-hint">Hint</button>
-<button id="btn-restart">Restart</button>
+  <select id="levelSelect">
+    <option value="1" selected>Lv1（けむ）</option>
+    <option value="2">Lv2（けむお）</option>
+    <option value="3">Lv3（けっち）</option>
+    <option value="4">Lv4（けっちむ）</option>
+    <option value="5">Lv5（けむた）</option>
+    <option value="6">Lv6（はっちけっち）</option>
+    <option value="7">Lv7（みにだけちお）</option>
+    <option value="8">Lv8（けむ∞）</option>
+  </select>
+  <button id="btn-undo">Undo</button>
+  <button id="btn-pass" title="合法手が無い時のみ有効" disabled>Pass</button>
+  <button id="btn-hint">Hint</button>
+  <button id="btn-restart">Restart</button>
 </div>
 
+
+<!-- 盤面 -->
 <div id="board" class="board"></div>
 
+
+<!-- スコア等 -->
 <div class="scoreboard">
-<div>手番: <span id="turnText">黒</span></div>
-<div>黒 (はむたくん): <span id="blackScore">2</span></div>
-<div>白 (けむたくん): <span id="whiteScore">2</span></div>
+  <div>手番: <span id="turnText">黒</span></div>
+  <div>黒 (はむたくん): <span id="blackScore">2</span></div>
+  <div>白 (けむたくん): <span id="whiteScore">2</span></div>
+  <div class="dim">思考: <span id="thinkBadge" class="badge">-</span></div>
 </div>
+
 
 <div id="status"></div>
 <div id="recordText">はむたくん 0勝 / けむたくん 0勝</div>
 
+
+<!-- 勝敗演出 -->
+<img id="hamWin" src="kemutakun.png" alt="はむたくんまたあそぼう">
+<div id="hamMsg">はむたくんまたあそぼう</div>
+
+
 <script>
-// --- 定数 ---
+/* ===== 定数 ===== */
 const SIZE=8,EMPTY=0,BLACK=1,WHITE=-1;
 const DIRS=[[ -1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+const POS_W=[
+  [120,-20,20,5,5,20,-20,120],[-20,-40,-5,-5,-5,-5,-40,-20],
+  [20,-5,15,2,2,15,-5,20],[5,-5,2,2,2,2,-5,5],
+  [5,-5,2,2,2,2,-5,5],[20,-5,15,2,2,15,-5,20],
+  [-20,-40,-5,-5,-5,-5,-40,-20],[120,-20,20,5,5,20,-20,120]];
 
-// --- DOM ---
-const boardEl=document.getElementById('board'),turnText=document.getElementById('turnText');
-const blackScoreEl=document.getElementById('blackScore'),whiteScoreEl=document.getElementById('whiteScore');
-const statusEl=document.getElementById('status'),recordTextEl=document.getElementById('recordText');
-const btnRestart=document.getElementById('btn-restart'),btnUndo=document.getElementById('btn-undo');
-const btnPass=document.getElementById('btn-pass'),btnHint=document.getElementById('btn-hint');
-const levelSelect=document.getElementById('levelSelect');
-const kemutakunEl=document.getElementById('kemutakun');
 
-// --- ゲーム状態 ---
-let state={board:createInitialBoard(),turn:BLACK,showHints:true,history:[],level:7,isCpuThinking:false};
+/* ===== DOM ===== */
+const boardEl=document.getElementById('board'),
+      turnText=document.getElementById('turnText'),
+      blackScoreEl=document.getElementById('blackScore'),
+      whiteScoreEl=document.getElementById('whiteScore'),
+      statusEl=document.getElementById('status'),
+      recordTextEl=document.getElementById('recordText'),
+      btnRestart=document.getElementById('btn-restart'),
+      btnUndo=document.getElementById('btn-undo'),
+      btnPass=document.getElementById('btn-pass'),
+      btnHint=document.getElementById('btn-hint'),
+      levelSelect=document.getElementById('levelSelect'),
+      thinkBadge=document.getElementById('thinkBadge'),
+      hamWinImg=document.getElementById('hamWin'),
+      hamMsg=document.getElementById('hamMsg');
+
+
+/* ===== 状態 ===== */
+let state={
+  board:createInitialBoard(),
+  turn:BLACK,
+  showHints:true,
+  history:[],
+  level:1,
+  isCpuThinking:false,
+  lastHumanTurnIndex:0
+};
 let record={black:0,white:0,lastWinner:null};
-const savedRecord = JSON.parse(localStorage.getItem('othelloRecord'));
-if(savedRecord) record = savedRecord;
+const savedRec=JSON.parse(localStorage.getItem('othelloRecord_v2'));
+if(savedRec) record=savedRec;
 
-// --- 初期盤面 ---
+
+/* ===== 盤面生成 ===== */
 function createInitialBoard(){
-    const b=Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
-    const mid=SIZE/2;
-    b[mid-1][mid-1]=WHITE;b[mid][mid]=WHITE;b[mid-1][mid]=BLACK;b[mid][mid-1]=BLACK;
-    return b;
+  const b=Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
+  const m=SIZE/2;b[m-1][m-1]=WHITE;b[m][m]=WHITE;b[m-1][m]=BLACK;b[m][m-1]=BLACK;
+  return b;
 }
 
-// --- ゲームロジック ---
-function inBounds(r,c){return r>=0&&r<SIZE&&c>=0&&c<SIZE;}
-function getLegalMoves(board,player){
-    const moves=new Map();
-    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
-        if(board[r][c]!==EMPTY)continue;
-        const flipsAll=[];
-        for(const [dr,dc] of DIRS){
-            let i=r+dr,j=c+dc,st=[];
-            while(inBounds(i,j)&&board[i][j]===-player){st.push([i,j]);i+=dr;j+=dc;}
-            if(st.length>0&&inBounds(i,j)&&board[i][j]===player)flipsAll.push(...st);
-        }
-        if(flipsAll.length>0)moves.set(`${r},${c}`,flipsAll);
+
+/* ===== 合法手 ===== */
+const inBounds=(r,c)=>r>=0&&r<SIZE&&c>=0&&c<SIZE;
+function getLegalMoves(board,p){
+  const mv=new Map();
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+    if(board[r][c]!==EMPTY)continue;
+    const flips=[];
+    for(const[dr,dc]of DIRS){
+      let i=r+dr,j=c+dc,st=[];
+      while(inBounds(i,j)&&board[i][j]===-p){st.push([i,j]);i+=dr;j+=dc;}
+      if(st.length&&inBounds(i,j)&&board[i][j]===p)flips.push(...st);
     }
-    return moves;
+    if(flips.length) mv.set(`${r},${c}`,flips);
+  }
+  return mv;
 }
 
-function applyMove(board,r,c,player,flips){
-    const next=board.map(row=>row.slice());
-    next[r][c]=player;
-    flips.forEach(([i,j])=>next[i][j]=player);
-    return next;
-}
 
-function score(board){
-    let black=0,white=0;
-    for(const row of board)for(const v of row){if(v===BLACK)black++;else if(v===WHITE)white++;}
-    return {black,white};
+/* ===== 盤更新 ===== */
+function applyMove(board,r,c,p,flips){
+  const n=board.map(row=>row.slice());
+  n[r][c]=p;flips.forEach(([i,j])=>n[i][j]=p);
+  return n;
 }
+function score(b){let bl=0,wh=0;for(const row of b)for(const v of row){if(v===BLACK)bl++;else if(v===WHITE)wh++;}return{black:bl,white:wh};}
 
-// --- 描画 ---
+
+/* ===== 描画 ===== */
 function render(){
-    boardEl.innerHTML='';
-    const legal=getLegalMoves(state.board,state.turn);
-    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
-        const sq=document.createElement('button');
-        sq.className='square'; sq.dataset.r=r; sq.dataset.c=c;
-        const v=state.board[r][c];
-        if(v!==EMPTY){const d=document.createElement('div'); d.className='disc '+(v===BLACK?'black':'white'); sq.appendChild(d);}
-        else if(legal.has(`${r},${c}`)&&state.showHints) sq.classList.add('hint');
-        sq.addEventListener('click',onPlace);
-        boardEl.appendChild(sq);
-    }
-    const {black,white}=score(state.board);
-    blackScoreEl.textContent=black; whiteScoreEl.textContent=white;
-    turnText.textContent=state.turn===BLACK?'黒':'白';
-    checkGameOver();
-    updateRecordText();
+  boardEl.innerHTML='';
+  const legal=getLegalMoves(state.board,state.turn);
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+    const sq=document.createElement('button');
+    sq.className='square';sq.dataset.r=r;sq.dataset.c=c;
+    const v=state.board[r][c];
+    if(v!==EMPTY){
+      const d=document.createElement('div');
+      d.className='disc '+(v===BLACK?'black':'white');
+      sq.appendChild(d);
+    }else if(legal.has(`${r},${c}`)&&state.showHints) sq.classList.add('hint');
+    if(state.isCpuThinking) sq.classList.add('disabled');
+    sq.onclick=onPlace;
+    boardEl.appendChild(sq);
+  }
+  const {black,white}=score(state.board);
+  blackScoreEl.textContent=black;whiteScoreEl.textContent=white;
+  turnText.textContent=state.turn===BLACK?'黒':'白';
+
+
+  const hasMove=legal.size>0;
+  btnPass.disabled=hasMove;
+  checkGameOver();updateRecordText();
+
+
+  /* --- 自動パス --- */
+  if(!hasMove && !state.isCpuThinking){
+    setTimeout(()=>{
+      if(getLegalMoves(state.board,state.turn).size===0){
+        manualPass();
+      }
+    },600);
+  }
 }
 
-// --- プレイヤー操作 ---
+
+/* ===== 入力 ===== */
 function onPlace(e){
-    if(state.isCpuThinking) return;
-    const r=+e.currentTarget.dataset.r;
-    const c=+e.currentTarget.dataset.c;
-    makeMove(r,c);
+  if(state.isCpuThinking||state.turn!==BLACK) return;
+  const r=+e.currentTarget.dataset.r,c=+e.currentTarget.dataset.c,
+        legal=getLegalMoves(state.board,state.turn),k=`${r},${c}`;
+  if(!legal.has(k)) return;
+  pushHistory(true);
+  state.board=applyMove(state.board,r,c,BLACK,legal.get(k));
+  state.turn=WHITE;
+  render();
+  setTimeout(cpuTurn,10);
+}
+function manualPass(){
+  if(getLegalMoves(state.board,state.turn).size===0){
+    pushHistory(false);state.turn*=-1;render();
+    if(state.turn===WHITE) setTimeout(cpuTurn,10);
+  }
 }
 
-// --- 移動処理 ---
-function makeMove(r,c){
-    const legal=getLegalMoves(state.board,state.turn);
-    const key=`${r},${c}`;
-    if(!legal.has(key)) return;
 
-    pushHistory();
-    state.board=applyMove(state.board,r,c,state.turn,legal.get(key));
+/* ===== CPUターン ===== */
+async function cpuTurn(){
+  if(state.isCpuThinking) return;
+  const legalW=getLegalMoves(state.board,WHITE);
+  if(!legalW.size){state.turn=BLACK;return render();}
+  state.isCpuThinking=true;thinkBadge.textContent='考え中…';
+  const start=performance.now();
+  const cfg=[,{timeMs:80,maxDepth:1},{timeMs:120,maxDepth:2},{timeMs:220,maxDepth:3},{timeMs:350,maxDepth:4},
+             {timeMs:550,maxDepth:5},{timeMs:800,maxDepth:6},{timeMs:1200,maxDepth:7},{timeMs:2200,maxDepth:9}][state.level];
+  const {move}=await chooseMoveIterative(state.board,WHITE,legalW,state.level,cfg);
+  if(move){
+    const flips=legalW.get(`${move[0]},${move[1]}`);
+    highlightCpuMove(move[0],move[1]);           /* 赤ハイライト */
+    setTimeout(()=>{
+      state.board=applyMove(state.board,move[0],move[1],WHITE,flips);
+      state.turn=BLACK;
+      state.isCpuThinking=false;
+      thinkBadge.textContent=((performance.now()-start)|0)+'ms';
+      render();
+    },300);
+  }else{
+    state.turn=BLACK;
+    state.isCpuThinking=false;
+    thinkBadge.textContent='-';
     render();
-    state.turn*=-1;
-
-    if(state.turn===WHITE){
-        const legalWhite=getLegalMoves(state.board,WHITE);
-        if(legalWhite.size===0){state.turn=BLACK; render(); return;}
-        state.isCpuThinking=true;
-        setTimeout(()=>{
-            const move=chooseMove(legalWhite,state.level,state.board,WHITE);
-            if(!move){state.turn=BLACK; state.isCpuThinking=false; render(); return;}
-            const flips=legalWhite.get(`${move[0]},${move[1]}`);
-            state.board=applyMove(state.board,move[0],move[1],WHITE,flips);
-
-            // 赤石表示
-            const sq=Array.from(document.querySelectorAll('.square'))
-                        .find(s=>+s.dataset.r===move[0]&&+s.dataset.c===move[1]);
-            if(sq){
-                sq.innerHTML='';
-                const disc=document.createElement('div'); disc.className='disc cpu-temp'; sq.appendChild(disc);
-            }
-
-            setTimeout(()=>{
-                state.turn=BLACK;
-                state.isCpuThinking=false;
-                render();
-            },1000);
-        },1000);
-    }
+  }
+}
+function highlightCpuMove(r,c){
+  const sq=[...document.querySelectorAll('.square')]
+           .find(s=>+s.dataset.r===r&&+s.dataset.c===c);
+  if(!sq) return;
+  sq.innerHTML='';
+  const d=document.createElement('div');
+  d.className='disc cpu-temp';
+  sq.appendChild(d);
 }
 
-// --- CPUアルゴリズム ---
-function chooseMove(legal,level,board,player){
-    const moves=[...legal.keys()].map(k=>k.split(',').map(Number));
-    if(level<=1) return moves[Math.floor(Math.random()*moves.length)];
-    let bestVal=-Infinity,bestMove=null;
-    const depth=level>=7?4:level>=5?3:2;
-    for(const [r,c] of moves){
-        const flips=legal.get(`${r},${c}`);
-        const val=alphabeta(applyMove(board,r,c,player,flips),depth,-Infinity,Infinity,-player,true);
-        if(val>bestVal){bestVal=val; bestMove=[r,c];}
-    }
-    return bestMove;
+
+/* ===== ヒストリー ===== */
+function pushHistory(human){
+  state.history.push({board:state.board.map(r=>r.slice()),turn:state.turn});
+  if(human) state.lastHumanTurnIndex=state.history.length;
+}
+function undoToHumanTurn(){
+  if(state.isCpuThinking) return;
+  while(state.history.length&&state.history[state.history.length-1].turn!==BLACK) state.history.pop();
+  const prev=state.history.pop();
+  if(prev){state.board=prev.board;state.turn=prev.turn;render();}
+}
+function restart(){
+  state.board=createInitialBoard();state.turn=BLACK;state.history=[];
+  hamWinImg.style.display=hamMsg.style.display='none';boardEl.classList.remove('hide');
+  statusEl.textContent='';thinkBadge.textContent='-';render();
 }
 
-function alphabeta(board,depth,alpha,beta,player,isMax){
-    const legal=getLegalMoves(board,player);
-    if(depth===0 || legal.size===0) return evaluateBoard(board);
-    if(isMax){
-        let val=-Infinity;
-        for(const key of legal.keys()){
-            const [r,c]=key.split(',').map(Number);
-            const flips=legal.get(key);
-            val=Math.max(val, alphabeta(applyMove(board,r,c,player,flips),depth-1,alpha,beta,-player,false));
-            alpha=Math.max(alpha,val);
-            if(beta<=alpha) break;
-        }
-        return val;
-    }else{
-        let val=Infinity;
-        for(const key of legal.keys()){
-            const [r,c]=key.split(',').map(Number);
-            const flips=legal.get(key);
-            val=Math.min(val, alphabeta(applyMove(board,r,c,player,flips),depth-1,alpha,beta,-player,true));
-            beta=Math.min(beta,val);
-            if(beta<=alpha) break;
-        }
-        return val;
-    }
+
+/* ===== 勝敗演出 ===== */
+function celebrateHam(){
+  boardEl.classList.add('hide');
+  hamWinImg.style.display='block';
+  hamMsg.style.display='block';
 }
-
-function evaluateBoard(board){
-    const WEIGHTS=[[20,-3,11,8,8,11,-3,20],[-3,-7,-4,1,1,-4,-7,-3],[11,-4,2,2,2,2,-4,11],[8,1,2,0,0,2,1,8],[8,1,2,0,0,2,1,8],[11,-4,2,2,2,2,-4,11],[-3,-7,-4,1,1,-4,-7,-3],[20,-3,11,8,8,11,-3,20]];
-    let val=0;
-    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
-        if(board[r][c]===WHITE) val+=WEIGHTS[r][c];
-        else if(board[r][c]===BLACK) val-=WEIGHTS[r][c];
-    }
-    return val;
-}
-
-// --- ヒストリー ---
-function pushHistory(){state.history.push({board:state.board.map(r=>r.slice()),turn:state.turn});}
-function undo(){if(state.history.length>=2){state.history.pop(); const prev=state.history.pop(); if(prev){state.board=prev.board; state.turn=prev.turn; render();}}}
-function restart(){state.board=createInitialBoard(); state.turn=BLACK; state.history=[];statusEl.textContent='';render();}
-function toggleHint(){state.showHints=!state.showHints; render();}
-
-// --- 勝敗チェック ---
 function checkGameOver(){
-    const legalBlack=getLegalMoves(state.board,BLACK);
-    const legalWhite=getLegalMoves(state.board,WHITE);
-    if(legalBlack.size===0 && legalWhite.size===0){
-        const {black,white}=score(state.board);
-        let winner=null;
-        if(black>white) winner='black';
-        else if(white>black) winner='white';
-        if(winner){ statusEl.textContent=winner==='black'?'勝者: はむたくん (黒)！':'勝者: けむたくん (白)！'; updateRecord(winner);}
-    }
+  const noB=getLegalMoves(state.board,BLACK).size===0,
+        noW=getLegalMoves(state.board,WHITE).size===0;
+  if(!noB||!noW){statusEl.textContent='';return;}
+  const {black,white}=score(state.board);
+
+  /* ==== 変更点：常に「はむたくんまたあそぼう」を表示 ==== */
+  celebrateHam();                       // 勝っても負けても同じ演出
+  updateRecord(black>white?'black':'white');
 }
 
+
+/* ===== 成績保存 ===== */
 function updateRecord(winner){
-    if(record.lastWinner===winner) return;
-    if(winner==='black') record.black++;
-    else if(winner==='white') record.white++;
-    record.lastWinner=winner;
-    localStorage.setItem('othelloRecord',JSON.stringify(record));
+  if(record.lastWinner===winner) return;
+  if(winner==='black') record.black++; else record.white++;
+  record.lastWinner=winner;
+  localStorage.setItem('othelloRecord_v2',JSON.stringify(record));
+}
+function updateRecordText(){
+  recordTextEl.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;
 }
 
-function updateRecordText(){recordTextEl.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;}
 
-// --- イベント ---
-btnRestart.addEventListener('click',restart);
-btnUndo.addEventListener('click',undo);
-btnHint.addEventListener('click',toggleHint);
-btnPass.addEventListener('click',()=>{state.turn*=-1;render();});
-levelSelect.addEventListener('change',()=>{state.level=+levelSelect.value;});
+/* ===== 評価関数 ===== */
+function evaluateBoardComplex(b){
+  let pos=0;
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)
+    pos+=(b[r][c]===WHITE?1:-1)*POS_W[r][c];
+  const ms=getLegalMoves(b,WHITE).size,mo=getLegalMoves(b,BLACK).size,
+        mobility=10*(ms-mo);
+  const corners=[[0,0],[0,7],[7,0],[7,7]];
+  let cs=0,co=0;for(const[p,q]of corners){
+    if(b[p][q]===WHITE)cs++;else if(b[p][q]===BLACK)co++;
+  }
+  const corner=60*(cs-co);
+  const near={'0,0':[[0,1],[1,1],[1,0]],'0,7':[[0,6],[1,6],[1,7]],
+              '7,0':[[6,0],[6,1],[7,1]],'7,7':[[6,7],[6,6],[7,6]]};
+  let pen=0;for(const k in near){
+    const[cr,cc]=k.split(',').map(Number);
+    if(b[cr][cc]!==EMPTY) continue;
+    for(const[x,y] of near[k]) pen+=(b[x][y]===WHITE?-8: b[x][y]===BLACK?8:0);
+  }
+  const frontier=p=>{
+    let n=0;
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)
+      if(b[r][c]===p)
+        for(const[d1,d2] of DIRS){
+          const nr=r+d1,nc=c+d2;
+          if(inBounds(nr,nc)&&b[nr][nc]===EMPTY){n++;break;}
+        }
+    return n;
+  };
+  const front=-5*(frontier(WHITE)-frontier(BLACK));
+  const stableEdge=color=>{
+    let s=0;
+    for(const r of[0,7]){
+      let ok=true;
+      for(let c=0;c<SIZE;c++) if(b[r][c]===color&&ok)s++; else ok=false;
+      ok=true;
+      for(let c=SIZE-1;c>=0;c--) if(b[r][c]===color&&ok)s++; else ok=false;
+    }
+    for(const c of[0,7]){
+      let ok=true;
+      for(let r=0;r<SIZE;r++) if(b[r][c]===color&&ok)s++; else ok=false;
+      ok=true;
+      for(let r=SIZE-1;r>=0;r--) if(b[r][c]===color&&ok)s++; else ok=false;
+    }
+    return s;
+  };
+  const stable=1.2*(stableEdge(WHITE)-stableEdge(BLACK)),
+        sc=score(b),tot=sc.black+sc.white,
+        endW=tot>=48?4:tot>=40?2:0.5;
+  return pos+mobility+corner+pen+front+stable+endW*(sc.white-sc.black);
+}
 
-// --- けむたくんアニメーション ---
-let kemuOffset=0,kemuDir=1;
-const kemuSpeed=10,kemuMax=50;
-setInterval(()=>{
-  kemuOffset+=kemuSpeed*kemuDir;
-  if(kemuOffset>kemuMax||kemuOffset<-kemuMax) kemuDir*=-1;
-  kemutakunEl.style.transform=`translateX(-50%) translateX(${kemuOffset}px)`;
-},200);
 
-// --- 初回描画 ---
+/* ===== 探索 ===== */
+function chooseMoveIterative(board,p,legal,lvl,lim){
+  return new Promise(resolve=>{
+    let best=null,
+        moves=[...legal.keys()].map(k=>k.split(',').map(Number))
+             .sort((a,b)=>POS_W[b[0]][b[1]]-POS_W[a[0]][a[1]]),
+        depth=1,deadline=performance.now()+lim.timeMs;
+    const search=()=>{
+      if(performance.now()>deadline||depth>lim.maxDepth) return resolve({move:best});
+      let localBest=-1e9,lMove=null;
+      for(const mv of moves){
+        if(performance.now()>deadline) break;
+        const fl=legal.get(`${mv[0]},${mv[1]}`),
+              child=applyMove(board,mv[0],mv[1],p,fl),
+              val=-alphabeta(child,depth-1,-1e9,1e9,-p,deadline);
+        if(val>localBest){localBest=val;lMove=mv;}
+      }
+      if(lMove){best=lMove;moves=[lMove,...moves.filter(m=>m!==lMove)];}
+      depth++;setTimeout(search,0);
+    };
+    search();
+  });
+}
+function alphabeta(b,d,a,beta,p,dl){
+  if(d<=0||performance.now()>dl) return evaluateBoardComplex(b);
+  const legal=getLegalMoves(b,p);
+  if(!legal.size){
+    const opp=getLegalMoves(b,-p);
+    if(!opp.size){const sc=score(b);return(sc.white-sc.black)*100;}
+    return -alphabeta(b,d-1,-beta,-a,-p,dl);
+  }
+  const mv=[...legal.keys()].map(k=>k.split(',').map(Number))
+             .sort((x,y)=>POS_W[y[0]][y[1]]-POS_W[x[0]][x[1]]);
+  for(const [r,c] of mv){
+    const fl=legal.get(`${r},${c}`),
+          child=applyMove(b,r,c,p,fl),
+          val=-alphabeta(child,d-1,-beta,-a,-p,dl);
+    if(val>a){a=val;if(a>=beta) break;}
+  }
+  return a;
+}
+
+
+/* ===== イベント登録 ===== */
+btnRestart.onclick=restart;
+btnUndo.onclick=undoToHumanTurn;
+btnHint.onclick=()=>{state.showHints=!state.showHints;render();};
+btnPass.onclick=manualPass;
+levelSelect.onchange=()=>{state.level=+levelSelect.value;};
+
+
+/* ===== 初期描画 ===== */
 render();
 </script>
 </body>
