@@ -75,160 +75,176 @@ let state={board:createInitialBoard(),turn:BLACK,showHints:true,history:[],level
 let lastCpuMove=null;
 let record={black:0,white:0,lastWinner:null};
 
-function createInitialBoard(){const b=Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));const mid=SIZE/2;b[mid-1][mid-1]=WHITE;b[mid][mid]=WHITE;b[mid-1][mid]=BLACK;b[mid][mid-1]=BLACK;return b;}
+function createInitialBoard(){
+    const b=Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
+    const mid=SIZE/2;
+    b[mid-1][mid-1]=WHITE;b[mid][mid]=WHITE;b[mid-1][mid]=BLACK;b[mid][mid-1]=BLACK;
+    return b;
+}
 
 const DIRS=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
 function inBounds(r,c){return r>=0&&r<SIZE&&c>=0&&c<SIZE;}
 function getLegalMoves(board,player){
-  const moves=new Map();
-  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
-    if(board[r][c]!==EMPTY)continue;
-    const flipsAll=[];
-    for(const [dr,dc] of DIRS){
-      let i=r+dr,j=c+dc,st=[];
-      while(inBounds(i,j)&&board[i][j]===-player){st.push([i,j]);i+=dr;j+=dc;}
-      if(st.length>0&&inBounds(i,j)&&board[i][j]===player)flipsAll.push(...st);
+    const moves=new Map();
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+        if(board[r][c]!==EMPTY)continue;
+        const flipsAll=[];
+        for(const [dr,dc] of DIRS){
+            let i=r+dr,j=c+dc,st=[];
+            while(inBounds(i,j)&&board[i][j]===-player){st.push([i,j]);i+=dr;j+=dc;}
+            if(st.length>0&&inBounds(i,j)&&board[i][j]===player)flipsAll.push(...st);
+        }
+        if(flipsAll.length>0)moves.set(`${r},${c}`,flipsAll);
     }
-    if(flipsAll.length>0)moves.set(`${r},${c}`,flipsAll);
-  }
-  return moves;
+    return moves;
 }
-function applyMove(board,r,c,player,flips){const next=board.map(row=>row.slice());next[r][c]=player;for(const [i,j] of flips)next[i][j]=player;return next;}
-function score(board){let black=0,white=0;for(const row of board)for(const v of row){if(v===BLACK)black++;else if(v===WHITE)white++;}return {black,white};}
+function applyMove(board,r,c,player,flips){
+    const next=board.map(row=>row.slice());next[r][c]=player;
+    for(const [i,j] of flips)next[i][j]=player;
+    return next;
+}
+function score(board){
+    let black=0,white=0;
+    for(const row of board)for(const v of row){if(v===BLACK)black++;else if(v===WHITE)white++;}
+    return {black,white};
+}
 
 function render(){
-  boardEl.innerHTML='';
-  const legal=getLegalMoves(state.board,state.turn);
-  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
-    const sq=document.createElement('button');sq.className='square';sq.dataset.r=r;sq.dataset.c=c;
-    const v=state.board[r][c];
-    if(v!==EMPTY){const d=document.createElement('div');d.className='disc '+(v===BLACK?'black':'white');sq.appendChild(d);}
-    else if(legal.has(`${r},${c}`)&&state.showHints)sq.classList.add('hint');
-    sq.addEventListener('click',onPlace);
-    boardEl.appendChild(sq);
-  }
-  const {black,white}=score(state.board);
-  blackScoreEl.textContent=black;whiteScoreEl.textContent=white;
-  turnText.textContent=state.turn===BLACK?'黒':'白';
-  checkGameOver();
+    boardEl.innerHTML='';
+    const legal=getLegalMoves(state.board,state.turn);
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+        const sq=document.createElement('button');sq.className='square';sq.dataset.r=r;sq.dataset.c=c;
+        const v=state.board[r][c];
+        if(v!==EMPTY){const d=document.createElement('div');d.className='disc '+(v===BLACK?'black':'white');sq.appendChild(d);}
+        else if(legal.has(`${r},${c}`)&&state.showHints)sq.classList.add('hint');
+        sq.addEventListener('click',onPlace);
+        boardEl.appendChild(sq);
+    }
+    const {black,white}=score(state.board);
+    blackScoreEl.textContent=black;whiteScoreEl.textContent=white;
+    turnText.textContent=state.turn===BLACK?'黒':'白';
+    checkGameOver();
 }
 
 function onPlace(e){const r=+e.currentTarget.dataset.r;const c=+e.currentTarget.dataset.c;makeMove(r,c);}
 function makeMove(r,c){
-  const legal=getLegalMoves(state.board,state.turn);
-  const key=`${r},${c}`;
-  if(!legal.has(key))return;
-  pushHistory();
-  state.board=applyMove(state.board,r,c,state.turn,legal.get(key));
-  state.turn*=-1;
-  render();
-  if(state.turn===WHITE){
-    const legalWhite=getLegalMoves(state.board,WHITE);
-    if(legalWhite.size===0){state.turn=BLACK;render();return;}
-    const move=chooseMove(legalWhite,state.level,state.board,WHITE);
-    if(move){
-      lastCpuMove=move;
-      const delay=500+Math.random()*1000;
-      setTimeout(()=>{makeMove(move[0],move[1]);highlightMove(lastCpuMove[0],lastCpuMove[1]);},delay);
+    const legal=getLegalMoves(state.board,state.turn);
+    const key=`${r},${c}`;
+    if(!legal.has(key))return;
+    pushHistory();
+    state.board=applyMove(state.board,r,c,state.turn,legal.get(key));
+    state.turn*=-1;
+    render();
+    if(state.turn===WHITE){
+        const legalWhite=getLegalMoves(state.board,WHITE);
+        if(legalWhite.size===0){state.turn=BLACK;render();return;}
+        const move=chooseMove(legalWhite,state.level,state.board,WHITE);
+        if(move){
+            lastCpuMove=move;
+            const delay=500+Math.random()*1000;
+            setTimeout(()=>{makeMove(move[0],move[1]);highlightMove(lastCpuMove[0],lastCpuMove[1]);},delay);
+        }
     }
-  }
 }
 
 function chooseMove(legal,level,board,player){
-  const moves=[...legal.keys()].map(k=>k.split(',').map(Number));
-  if(level===1)return moves[Math.floor(Math.random()*moves.length)];
-  let bestVal=-Infinity,bestMove=null,depth=1;
-  if(level===7)depth=4;
-  else if(level===6)depth=3;
-  else if(level===5)depth=2;
-  else depth=1;
-  for(const [r,c] of moves){
-    const flips=legal.get(`${r},${c}`);
-    let val=minimax(applyMove(board,r,c,player,flips),depth,-player,level,true);
-    if(val>bestVal){bestVal=val;bestMove=[r,c];}
-  }
-  return bestMove;
+    const moves=[...legal.keys()].map(k=>k.split(',').map(Number));
+    if(level===1)return moves[Math.floor(Math.random()*moves.length)];
+    let bestVal=-Infinity,bestMove=null,depth=1;
+    if(level===7)depth=4;
+    else if(level===6)depth=3;
+    else if(level===5)depth=2;
+    else depth=1;
+    for(const [r,c] of moves){
+        const flips=legal.get(`${r},${c}`);
+        let val=minimax(applyMove(board,r,c,player,flips),depth,-player,level,true);
+        if(val>bestVal){bestVal=val;bestMove=[r,c];}
+    }
+    return bestMove;
 }
 
 function minimax(board,depth,player,level,isRoot=false){
-  if(depth===0)return evaluateBoard(board,player,level);
-  const legal=getLegalMoves(board,player);
-  if(legal.size===0)return evaluateBoard(board,player,level);
-  let best=(player===WHITE)?-Infinity:Infinity;
-  for(const key of legal.keys()){
-    const [r,c]=key.split(',').map(Number);
-    const flips=legal.get(key);
-    const newBoard=applyMove(board,r,c,player,flips);
-    const val=minimax(newBoard,depth-1,-player,level);
-    if(player===WHITE){if(val>best)best=val;}else{if(val<best)best=val;}
-  }
-  return best;
+    if(depth===0)return evaluateBoard(board,player,level);
+    const legal=getLegalMoves(board,player);
+    if(legal.size===0)return evaluateBoard(board,player,level);
+    let best=(player===WHITE)?-Infinity:Infinity;
+    for(const key of legal.keys()){
+        const [r,c]=key.split(',').map(Number);
+        const flips=legal.get(key);
+        const newBoard=applyMove(board,r,c,player,flips);
+        const val=minimax(newBoard,depth-1,-player,level);
+        if(player===WHITE){if(val>best)best=val;}else{if(val<best)best=val;}
+    }
+    return best;
 }
 
 function evaluateBoard(board,player,level){
-  const weightCorner=25,weightEdge=5,weightMobility=2,weightStone=1;
-  let val=0;
-  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){if(board[r][c]===WHITE)val+=weightStone;else if(board[r][c]===BLACK)val-=weightStone;}
-  const corners=[[0,0],[0,7],[7,0],[7,7]];
-  for(const [r,c] of corners){if(board[r][c]===WHITE)val+=weightCorner;else if(board[r][c]===BLACK)val-=weightCorner;}
-  for(let i=1;i<SIZE-1;i++){
-    if(board[0][i]===WHITE||board[7][i]===WHITE||board[i][0]===WHITE||board[i][7]===WHITE)val+=weightEdge;
-    if(board[0][i]===BLACK||board[7][i]===BLACK||board[i][0]===BLACK||board[i][7]===BLACK)val-=weightEdge;
-  }
-  const myMoves=getLegalMoves(board,WHITE).size;
-  const oppMoves=getLegalMoves(board,BLACK).size;
-  val+=weightMobility*(myMoves-oppMoves);
-  const dangerSquares=[[0,1],[1,0],[1,1],[0,6],[1,6],[1,7],[6,0],[6,1],[7,1],[6,6],[6,7],[7,6]];
-  for(const [r,c] of dangerSquares){if(board[r][c]===WHITE)val-=3;else if(board[r][c]===BLACK)val+=3;}
-  return val;
+    const weightCorner=25,weightEdge=5,weightMobility=2,weightStone=1;
+    let val=0;
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){if(board[r][c]===WHITE)val+=weightStone;else if(board[r][c]===BLACK)val-=weightStone;}
+    const corners=[[0,0],[0,7],[7,0],[7,7]];
+    for(const [r,c] of corners){if(board[r][c]===WHITE)val+=weightCorner;else if(board[r][c]===BLACK)val-=weightCorner;}
+    for(let i=1;i<SIZE-1;i++){
+        if(board[0][i]===WHITE||board[7][i]===WHITE||board[i][0]===WHITE||board[i][7]===WHITE)val+=weightEdge;
+        if(board[0][i]===BLACK||board[7][i]===BLACK||board[i][0]===BLACK||board[i][7]===BLACK)val-=weightEdge;
+    }
+    const myMoves=getLegalMoves(board,WHITE).size;
+    const oppMoves=getLegalMoves(board,BLACK).size;
+    val+=weightMobility*(myMoves-oppMoves);
+    const dangerSquares=[[0,1],[1,0],[1,1],[0,6],[1,6],[1,7],[6,0],[6,1],[7,1],[6,6],[6,7],[7,6]];
+    for(const [r,c] of dangerSquares){if(board[r][c]===WHITE)val-=3;else if(board[r][c]===BLACK)val+=3;}
+    return val;
 }
 
 function pushHistory(){state.history.push({board:state.board.map(r=>r.slice()),turn:state.turn});}
 function undo(){const prev=state.history.pop();if(prev){state.board=prev.board;state.turn=prev.turn;render();}}
 function restart(){state.board=createInitialBoard();state.turn=BLACK;state.history=[];statusEl.textContent='';render();state.turn=BLACK;}
-
 function toggleHint(){state.showHints=!state.showHints;render();}
 
 function checkGameOver(){
-  const legalBlack=getLegalMoves(state.board,BLACK);
-  const legalWhite=getLegalMoves(state.board,WHITE);
-  if(legalBlack.size===0 && legalWhite.size===0){
-    const {black,white}=score(state.board);
-    let winner=null;
-    if(black>white)winner='black';
-    else if(white>black)winner='white';
-    if(winner){
-      statusEl.textContent=winner==='black'?'勝者: はむたくん (黒)！':'勝者: けむたくん (白)！';
-      updateRecord(winner);
+    const legalBlack=getLegalMoves(state.board,BLACK);
+    const legalWhite=getLegalMoves(state.board,WHITE);
+    if(legalBlack.size===0 && legalWhite.size===0){
+        const {black,white}=score(state.board);
+        let winner=null;
+        if(black>white)winner='black';
+        else if(white>black)winner='white';
+        if(winner){
+            statusEl.textContent=winner==='black'?'勝者: はむたくん (黒)！':'勝者: けむたくん (白)！';
+            updateRecord(winner);
+        }
     }
-  }
 }
 
 function updateRecord(winner){
-  if(record.lastWinner===winner)return;
-  if(winner==='black')record.black++;
-  else if(winner==='white')record.white++;
-  record.lastWinner=winner;
-  recordText.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;
+    if(record.lastWinner===winner)return;
+    if(winner==='black')record.black++;
+    else if(winner==='white')record.white++;
+    record.lastWinner=winner;
+    recordText.textContent=`はむたくん ${record.black}勝 / けむたくん ${record.white}勝`;
 }
 
 function highlightMove(r,c){
-  const squares=document.querySelectorAll('.square');
-  const sq=Array.from(squares).find(s=>+s.dataset.r===r && +s.dataset.c===c);
-  if(!sq)return;
-  sq.classList.add('cpu-move');
-  setTimeout(()=>sq.classList.remove('cpu-move'),1000);
+    const squares=document.querySelectorAll('.square');
+    const sq=Array.from(squares).find(s=>+s.dataset.r===r && +s.dataset.c===c);
+    if(!sq)return;
+    sq.classList.add('cpu-move');
+    setTimeout(()=>sq.classList.remove('cpu-move'),1000);
 }
 
 const kemutakunEl=document.getElementById('kemutakun');
 let kemuOffset=0,kemuDir=1;
 const kemuSpeed=10,kemuMax=50;
-setInterval(()=>{kemuOffset+=kemuSpeed*kemuDir;if(kemuOffset>kemuMax||kemuOffset<-kemuMax)kemuDir*=-1;kmutakunEl.style.transform=`translateX(-50%) translateX(${kemuOffset}px)`;},200);
+setInterval(()=>{
+    kemuOffset+=kemuSpeed*kemuDir;
+    if(kemuOffset>kemuMax||kemuOffset<-kemuMax)kemuDir*=-1;
+    kemutakunEl.style.transform=`translateX(-50%) translateX(${kemuOffset}px)`;
+},200);
 
 btnRestart.addEventListener('click',restart);
 btnUndo.addEventListener('click',undo);
 btnHint.addEventListener('click',toggleHint);
-btnPass.addEventListener('click(()=>{state.turn*=-1;render();});
+btnPass.addEventListener('click',()=>{state.turn*=-1;render();});
 levelSelect.addEventListener('change',()=>{state.level=+levelSelect.value;});
 
 render();
